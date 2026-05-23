@@ -86,6 +86,14 @@
                   <option value="zoom">Zoom</option>
                 </select>
               </label>
+              <label>
+                Katman
+                <select id="assetLayer">
+                  <option value="main">Ana Kart</option>
+                  <option value="background">Arka Plan</option>
+                  <option value="lower-third">Lower Third</option>
+                </select>
+              </label>
               <label class="full">
                 Yerel Dosya
                 <input id="assetFile" type="file" accept="image/*,video/*" />
@@ -111,6 +119,33 @@
               ></iframe>
             </div>
           </div>
+
+          <div class="panel">
+            <p class="panel-kicker">OBS WebSocket</p>
+            <h2>OBS baglantisi</h2>
+            <div class="form-grid">
+              <label>
+                Host
+                <input id="obsHost" type="text" value="127.0.0.1:4455" />
+              </label>
+              <label>
+                Sifre
+                <input id="obsPassword" type="password" placeholder="obs-websocket sifresi" />
+              </label>
+              <label class="full">
+                Program Scene
+                <select id="obsSceneSelect">
+                  <option value="">Scene secin</option>
+                </select>
+              </label>
+            </div>
+            <div class="button-row">
+              <button id="obsConnect" class="primary-button">OBS Baglan</button>
+              <button id="obsRefreshScenes" class="secondary-button">Scene Yenile</button>
+              <button id="obsSwitchScene" class="secondary-button">Scene Gec</button>
+            </div>
+            <p id="obsStatus" class="hint">Bagli degil</p>
+          </div>
         </section>
 
         <section class="assets-column">
@@ -129,12 +164,39 @@
             </div>
             <div id="assetList" class="asset-list"></div>
           </div>
+
+          <div class="panel">
+            <div class="section-head">
+              <div>
+                <p class="panel-kicker">Rundown</p>
+                <h2>Yayin akisi</h2>
+              </div>
+              <button id="clearRundown" class="secondary-button">Temizle</button>
+            </div>
+            <div class="button-row">
+              <button id="rundownPrev" class="secondary-button">Onceki</button>
+              <button id="rundownNext" class="primary-button">Siradaki</button>
+            </div>
+            <div id="rundownList" class="asset-list"></div>
+          </div>
         </section>
       </main>
     </div>
 
     <div id="overlayRoot" class="overlay-root" hidden>
       <div id="overlayStage" class="overlay-stage">
+        <div id="backgroundCard" class="overlay-card overlay-background theme-neon is-hidden">
+          <div class="overlay-media-wrap" id="backgroundMediaWrap">
+            <img id="backgroundImage" class="overlay-image" alt="" />
+            <video id="backgroundVideo" class="overlay-video" playsinline></video>
+          </div>
+          <div class="overlay-copy" id="backgroundCopy">
+            <p id="backgroundEyebrow" class="overlay-eyebrow">Arka Plan</p>
+            <h2 id="backgroundTitle"></h2>
+            <p id="backgroundText"></p>
+          </div>
+        </div>
+
         <div id="overlayCard" class="overlay-card theme-neon is-hidden">
           <div class="overlay-media-wrap" id="overlayMediaWrap">
             <img id="overlayImage" class="overlay-image" alt="" />
@@ -144,6 +206,14 @@
             <p id="overlayEyebrow" class="overlay-eyebrow">Canli Yayin</p>
             <h2 id="overlayTitle"></h2>
             <p id="overlayText"></p>
+          </div>
+        </div>
+
+        <div id="lowerThirdCard" class="overlay-card overlay-lower-third theme-neon is-hidden">
+          <div class="overlay-copy" id="lowerThirdCopy">
+            <p id="lowerThirdEyebrow" class="overlay-eyebrow">Canli Bilgi</p>
+            <h2 id="lowerThirdTitle"></h2>
+            <p id="lowerThirdText"></p>
           </div>
         </div>
 

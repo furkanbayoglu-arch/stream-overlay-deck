@@ -246,6 +246,11 @@ textarea {
   justify-content: flex-end;
 }
 
+.asset-card.is-current {
+  outline: 1px solid rgba(102, 208, 255, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(102, 208, 255, 0.16);
+}
+
 .hotkey-badge {
   display: inline-flex;
   align-items: center;
@@ -284,6 +289,50 @@ textarea {
   opacity: 1;
   transform: translateY(0) scale(1);
   transition: opacity 320ms ease, transform 320ms ease;
+}
+
+.overlay-background {
+  inset: 0;
+  border-radius: 0;
+  padding: 0;
+  grid-template-columns: 1fr;
+  background: transparent;
+  box-shadow: none;
+}
+
+.overlay-background .overlay-media-wrap {
+  min-height: 100vh;
+  border-radius: 0;
+  background: transparent;
+}
+
+.overlay-background .overlay-copy {
+  position: absolute;
+  left: 4vw;
+  right: 4vw;
+  bottom: 5vh;
+  max-width: 40vw;
+  padding: 24px 28px;
+  border-radius: 24px;
+  background: rgba(10, 14, 22, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+.overlay-lower-third {
+  inset: auto 4vw 12vh 4vw;
+  grid-template-columns: 1fr;
+  max-width: 60vw;
+  padding: 22px 28px;
+}
+
+.overlay-lower-third .overlay-copy h2 {
+  font-size: clamp(1.8rem, 3vw, 3rem);
+  margin-bottom: 10px;
+}
+
+.overlay-lower-third .overlay-copy p {
+  font-size: clamp(1rem, 1.6vw, 1.3rem);
+  max-width: 60ch;
 }
 
 .overlay-card.is-hidden,

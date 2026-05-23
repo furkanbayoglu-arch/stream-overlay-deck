@@ -15,7 +15,8 @@ const defaultAssets = [
     theme: "neon",
     duration: 0,
     group: "Mola",
-    transition: "fade"
+    transition: "fade",
+    layer: "main"
   },
   {
     id: crypto.randomUUID(),
@@ -26,7 +27,8 @@ const defaultAssets = [
     theme: "minimal",
     duration: 0,
     group: "Alt Bant",
-    transition: "fade"
+    transition: "fade",
+    layer: "lower-third"
   }
 ];
 
@@ -36,7 +38,16 @@ const state = {
   deferredPrompt: null,
   activeGroup: "all",
   countdownTimer: null,
-  overlayAudioContext: null
+  overlayAudioContext: null,
+  rundown: [],
+  rundownIndex: -1,
+  obs: {
+    socket: null,
+    connected: false,
+    messageId: 0,
+    pending: new Map(),
+    scenes: []
+  }
 };
 
 function loadAssets() {
@@ -75,6 +86,7 @@ function saveDeckFormState() {
   const duration = Number(document.getElementById("assetDuration").value || 0);
   const group = document.getElementById("assetGroup").value.trim();
   const transition = document.getElementById("assetTransition").value;
+  const layer = document.getElementById("assetLayer").value;
 
   return {
     id: crypto.randomUUID(),
@@ -85,7 +97,8 @@ function saveDeckFormState() {
     theme,
     duration,
     group: group || "Genel",
-    transition
+    transition,
+    layer
   };
 }
 
@@ -98,6 +111,7 @@ function clearForm() {
   document.getElementById("assetDuration").value = "0";
   document.getElementById("assetGroup").value = "";
   document.getElementById("assetTransition").value = "fade";
+  document.getElementById("assetLayer").value = "main";
   document.getElementById("assetFile").value = "";
 }
 
@@ -144,11 +158,13 @@ function renderAssetList() {
           <span class="chip">${asset.theme}</span>
           <span class="chip">${asset.group || "Genel"}</span>
           <span class="chip">${asset.transition || "fade"}</span>
+          <span class="chip">${asset.layer || "main"}</span>
           ${asset.duration ? `<span class="chip">${asset.duration}s</span>` : ""}
         </div>
       </div>
       <div class="asset-actions">
         <button class="primary-button" data-action="show" data-id="${asset.id}">Yayina Ver</button>
+        <button class="secondary-button" data-action="queue" data-id="${asset.id}">Rundown</button>
         <button class="secondary-button" data-action="up" data-id="${asset.id}">Yukari</button>
         <button class="secondary-button" data-action="down" data-id="${asset.id}">Asagi</button>
         <button class="secondary-button" data-action="delete" data-id="${asset.id}">Sil</button>
@@ -168,6 +184,11 @@ function renderAssetList() {
 
       if (action === "show") {
         activateAsset(state.assets[index]);
+        return;
+      }
+      if (action === "queue") {
+        state.rundown.push(assetId);
+        renderRundown();
         return;
       }
       if (action === "delete") {
@@ -202,6 +223,72 @@ function refreshGroupFilter() {
   }
 }
 
+function renderRundown() {
+  const rundownList = document.getElementById("rundownList");
+  if (!rundownList) {
+    return;
+  }
+  rundownList.innerHTML = "";
+  state.rundown.forEach((assetId, index) => {
+    const asset = state.assets.find((entry) => entry.id === assetId);
+    if (!asset) {
+      return;
+    }
+    const item = document.createElement("article");
+    item.className = `asset-card ${index === state.rundownIndex ? "is-current" : ""}`;
+    item.innerHTML = `
+      <div class="asset-meta">
+        <div class="section-head">
+          <div class="hotkey-badge">${index + 1}</div>
+          <div>
+            <h3>${asset.title}</h3>
+            <p>${asset.group || "Genel"} • ${asset.layer || "main"}</p>
+          </div>
+        </div>
+      </div>
+      <div class="asset-actions">
+        <button class="primary-button" data-run-action="play" data-index="${index}">Oynat</button>
+        <button class="secondary-button" data-run-action="remove" data-index="${index}">Cikar</button>
+      </div>
+    `;
+    rundownList.appendChild(item);
+  });
+
+  rundownList.querySelectorAll("button[data-run-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.index);
+      if (button.dataset.runAction === "play") {
+        playRundownIndex(index);
+      } else {
+        state.rundown.splice(index, 1);
+        if (state.rundownIndex >= state.rundown.length) {
+          state.rundownIndex = state.rundown.length - 1;
+        }
+        renderRundown();
+      }
+    });
+  });
+}
+
+function playRundownIndex(index) {
+  const assetId = state.rundown[index];
+  const asset = state.assets.find((entry) => entry.id === assetId);
+  if (!asset) {
+    return;
+  }
+  state.rundownIndex = index;
+  activateAsset(asset);
+  renderRundown();
+}
+
+function nextRundown(step) {
+  if (!state.rundown.length) {
+    return;
+  }
+  const nextIndex = Math.min(Math.max(state.rundownIndex + step, 0), state.rundown.length - 1);
+  playRundownIndex(nextIndex);
+}
+
 function activateAsset(asset) {
   state.activeAssetId = asset.id;
   sendOverlayCommand({
@@ -221,6 +308,137 @@ function activateAsset(asset) {
 function clearOverlay() {
   state.activeAssetId = null;
   sendOverlayCommand({ type: "clear" });
+}
+
+function updateObsStatus(text) {
+  const node = document.getElementById("obsStatus");
+  if (node) {
+    node.textContent = text;
+  }
+}
+
+async function sha256Base64(input) {
+  const data = new TextEncoder().encode(input);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  const bytes = new Uint8Array(hash);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function obsRequest(requestType, requestData = {}) {
+  return new Promise((resolve, reject) => {
+    if (!state.obs.connected || !state.obs.socket) {
+      reject(new Error("OBS bagli degil"));
+      return;
+    }
+    const requestId = `req-${++state.obs.messageId}`;
+    state.obs.pending.set(requestId, { resolve, reject });
+    state.obs.socket.send(
+      JSON.stringify({
+        op: 6,
+        d: { requestType, requestId, requestData }
+      })
+    );
+  });
+}
+
+async function populateObsScenes() {
+  try {
+    const response = await obsRequest("GetSceneList");
+    const scenes = response?.responseData?.scenes || [];
+    state.obs.scenes = scenes;
+    const select = document.getElementById("obsSceneSelect");
+    select.innerHTML = `<option value="">Scene secin</option>${scenes
+      .map((scene) => `<option value="${scene.sceneName}">${scene.sceneName}</option>`)
+      .join("")}`;
+    if (response?.responseData?.currentProgramSceneName) {
+      select.value = response.responseData.currentProgramSceneName;
+    }
+    updateObsStatus(`OBS bagli • ${scenes.length} scene`);
+  } catch (error) {
+    updateObsStatus(`Scene okunamadi: ${error.message}`);
+  }
+}
+
+async function connectObs() {
+  const host = document.getElementById("obsHost")?.value.trim() || "127.0.0.1:4455";
+  const password = document.getElementById("obsPassword")?.value || "";
+  updateObsStatus("OBS baglaniyor...");
+
+  const socket = new WebSocket(`ws://${host}`);
+  state.obs.socket = socket;
+
+  socket.addEventListener("message", async (event) => {
+    const message = JSON.parse(event.data);
+    const { op, d } = message;
+
+    if (op === 0) {
+      let authentication;
+      const auth = d.authentication;
+      if (auth?.challenge && auth?.salt) {
+        const secret = await sha256Base64(password + auth.salt);
+        authentication = await sha256Base64(secret + auth.challenge);
+      }
+
+      socket.send(
+        JSON.stringify({
+          op: 1,
+          d: {
+            rpcVersion: d.rpcVersion || 1,
+            authentication
+          }
+        })
+      );
+      return;
+    }
+
+    if (op === 2) {
+      state.obs.connected = true;
+      updateObsStatus("OBS baglandi");
+      populateObsScenes();
+      return;
+    }
+
+    if (op === 7) {
+      const pending = state.obs.pending.get(d.requestId);
+      if (!pending) {
+        return;
+      }
+      state.obs.pending.delete(d.requestId);
+      if (d.requestStatus?.result) {
+        pending.resolve(d);
+      } else {
+        pending.reject(new Error(d.requestStatus?.comment || "OBS request hatasi"));
+      }
+    }
+  });
+
+  socket.addEventListener("close", () => {
+    state.obs.connected = false;
+    updateObsStatus("OBS baglantisi kapandi");
+  });
+
+  socket.addEventListener("error", () => {
+    state.obs.connected = false;
+    updateObsStatus("OBS baglanamadi");
+  });
+}
+
+async function switchObsScene() {
+  const sceneName = document.getElementById("obsSceneSelect")?.value;
+  if (!sceneName) {
+    updateObsStatus("Scene secin");
+    return;
+  }
+  try {
+    await obsRequest("SetCurrentProgramScene", { sceneName });
+    updateObsStatus(`OBS scene aktif: ${sceneName}`);
+  } catch (error) {
+    updateObsStatus(`Scene gecisi olmadi: ${error.message}`);
+  }
 }
 
 async function addAssetFromForm() {
@@ -259,6 +477,7 @@ function setupDeckMode() {
   loadAssets();
   refreshGroupFilter();
   renderAssetList();
+  renderRundown();
 
   document.getElementById("saveAsset").addEventListener("click", addAssetFromForm);
   document.getElementById("clearForm").addEventListener("click", clearForm);
@@ -276,6 +495,16 @@ function setupDeckMode() {
   document.getElementById("openOverlayWindow").addEventListener("click", () => {
     window.open("./index.html?mode=overlay", "_blank", "noopener,noreferrer");
   });
+  document.getElementById("obsConnect")?.addEventListener("click", connectObs);
+  document.getElementById("obsRefreshScenes")?.addEventListener("click", populateObsScenes);
+  document.getElementById("obsSwitchScene")?.addEventListener("click", switchObsScene);
+  document.getElementById("clearRundown")?.addEventListener("click", () => {
+    state.rundown = [];
+    state.rundownIndex = -1;
+    renderRundown();
+  });
+  document.getElementById("rundownNext")?.addEventListener("click", () => nextRundown(1));
+  document.getElementById("rundownPrev")?.addEventListener("click", () => nextRundown(-1));
 
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
@@ -309,6 +538,9 @@ function setupDeckMode() {
       event.preventDefault();
       clearOverlay();
     }
+    if (event.key === "Enter") {
+      nextRundown(1);
+    }
   });
 
   channel.postMessage({ type: "sync-request" });
@@ -316,15 +548,23 @@ function setupDeckMode() {
 
 function hideAllOverlayMedia() {
   document.getElementById("overlayImage").style.display = "none";
+  document.getElementById("backgroundImage").style.display = "none";
   const video = document.getElementById("overlayVideo");
+  const backgroundVideo = document.getElementById("backgroundVideo");
   video.pause();
   video.removeAttribute("src");
   video.load();
   video.style.display = "none";
+  backgroundVideo.pause();
+  backgroundVideo.removeAttribute("src");
+  backgroundVideo.load();
+  backgroundVideo.style.display = "none";
 }
 
 function clearOverlayView() {
+  document.getElementById("backgroundCard").classList.add("is-hidden");
   document.getElementById("overlayCard").classList.add("is-hidden");
+  document.getElementById("lowerThirdCard").classList.add("is-hidden");
   document.getElementById("tickerBar").classList.add("is-hidden");
   document.getElementById("countdownBox").classList.add("is-hidden");
   if (state.countdownTimer) {
@@ -399,53 +639,92 @@ function startCountdown(asset) {
 }
 
 function applyOverlayAsset(asset) {
+  const backgroundCard = document.getElementById("backgroundCard");
   const overlayCard = document.getElementById("overlayCard");
+  const lowerThirdCard = document.getElementById("lowerThirdCard");
   const tickerBar = document.getElementById("tickerBar");
+  const backgroundTitle = document.getElementById("backgroundTitle");
+  const backgroundText = document.getElementById("backgroundText");
+  const backgroundEyebrow = document.getElementById("backgroundEyebrow");
   const overlayTitle = document.getElementById("overlayTitle");
   const overlayText = document.getElementById("overlayText");
   const overlayEyebrow = document.getElementById("overlayEyebrow");
+  const lowerThirdTitle = document.getElementById("lowerThirdTitle");
+  const lowerThirdText = document.getElementById("lowerThirdText");
+  const lowerThirdEyebrow = document.getElementById("lowerThirdEyebrow");
+  const backgroundImage = document.getElementById("backgroundImage");
+  const backgroundVideo = document.getElementById("backgroundVideo");
   const overlayImage = document.getElementById("overlayImage");
   const overlayVideo = document.getElementById("overlayVideo");
   const tickerContent = document.getElementById("tickerContent");
   const countdownBox = document.getElementById("countdownBox");
+  const targetLayer = asset.layer || (asset.type === "ticker" ? "lower-third" : "main");
 
-  overlayCard.className = `overlay-card theme-${asset.theme} transition-${asset.transition || "fade"}`;
   tickerBar.classList.add("is-hidden");
   countdownBox.classList.add("is-hidden");
-  hideAllOverlayMedia();
 
-  overlayEyebrow.textContent = asset.type === "break" ? "Mola" : "Canli Yayin";
-  overlayTitle.textContent = asset.title || "";
-  overlayText.textContent = asset.text || "";
+  if (targetLayer === "background") {
+    backgroundCard.className = `overlay-card overlay-background theme-${asset.theme} transition-${asset.transition || "fade"}`;
+    backgroundEyebrow.textContent = asset.type === "break" ? "Mola" : "Arka Plan";
+    backgroundTitle.textContent = asset.title || "";
+    backgroundText.textContent = asset.text || "";
+    backgroundImage.style.display = "none";
+    backgroundVideo.pause();
+    backgroundVideo.removeAttribute("src");
+    backgroundVideo.load();
+  } else if (targetLayer === "lower-third" && asset.type !== "ticker") {
+    lowerThirdCard.className = `overlay-card overlay-lower-third theme-${asset.theme} transition-${asset.transition || "fade"}`;
+    lowerThirdEyebrow.textContent = "Canli Bilgi";
+    lowerThirdTitle.textContent = asset.title || "";
+    lowerThirdText.textContent = asset.text || "";
+  } else {
+    overlayCard.className = `overlay-card theme-${asset.theme} transition-${asset.transition || "fade"}`;
+    overlayEyebrow.textContent = asset.type === "break" ? "Mola" : "Canli Yayin";
+    overlayTitle.textContent = asset.title || "";
+    overlayText.textContent = asset.text || "";
+    overlayImage.style.display = "none";
+    overlayVideo.pause();
+    overlayVideo.removeAttribute("src");
+    overlayVideo.load();
+  }
 
   if (asset.type === "ticker") {
     tickerContent.textContent = asset.text || asset.title || "";
     tickerBar.classList.remove("is-hidden");
-    overlayCard.classList.add("is-hidden");
     return;
   }
 
   if (asset.type === "countdown") {
-    overlayCard.classList.add("is-hidden");
+    if (targetLayer === "main") {
+      overlayCard.classList.add("is-hidden");
+    }
     startCountdown(asset);
     return;
   }
 
   if (asset.mediaUrl) {
     if (asset.type === "video") {
-      overlayVideo.src = asset.mediaUrl;
-      overlayVideo.style.display = "block";
-      overlayVideo.muted = true;
-      overlayVideo.autoplay = true;
-      overlayVideo.loop = true;
-      overlayVideo.play().catch(() => {});
+      const targetVideo = targetLayer === "background" ? backgroundVideo : overlayVideo;
+      targetVideo.src = asset.mediaUrl;
+      targetVideo.style.display = "block";
+      targetVideo.muted = true;
+      targetVideo.autoplay = true;
+      targetVideo.loop = true;
+      targetVideo.play().catch(() => {});
     } else {
-      overlayImage.src = asset.mediaUrl;
-      overlayImage.style.display = "block";
+      const targetImage = targetLayer === "background" ? backgroundImage : overlayImage;
+      targetImage.src = asset.mediaUrl;
+      targetImage.style.display = "block";
     }
   }
 
-  overlayCard.classList.remove("is-hidden");
+  if (targetLayer === "background") {
+    backgroundCard.classList.remove("is-hidden");
+  } else if (targetLayer === "lower-third") {
+    lowerThirdCard.classList.remove("is-hidden");
+  } else {
+    overlayCard.classList.remove("is-hidden");
+  }
 }
 
 function setupOverlayMode() {
