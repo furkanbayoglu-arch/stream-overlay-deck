@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yayinci Gorsel Kontrol Masasi</title>
+    <meta
+      name="description"
+      content="YouTube yayinlarinda slayt, gorsel, video ve alt bant gostermek icin deck ve overlay uygulamasi."
+    />
+    <meta name="theme-color" content="#141821" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="deckApp" class="deck-app">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Stream Deck</p>
+          <h1>Yayinci Gorsel Kontrol Masasi</h1>
+        </div>
+        <div class="topbar-actions">
+          <button id="openOverlayWindow" class="secondary-button">Overlay Ac</button>
+          <button id="installApp" class="secondary-button">Masaustune Kur</button>
+          <button id="downloadHtml" class="primary-button">HTML Indir</button>
+        </div>
+      </header>
+
+      <main class="deck-layout">
+        <section class="editor-column">
+          <div class="panel">
+            <p class="panel-kicker">Yeni Kart</p>
+            <h2>Icerik olustur</h2>
+            <div class="form-grid">
+              <label>
+                Kart Tipi
+                <select id="assetType">
+                  <option value="slide">Duyuru Slaydi</option>
+                  <option value="image">Gorsel</option>
+                  <option value="video">Video</option>
+                  <option value="ticker">Alt Bant</option>
+                  <option value="break">Mola Ekrani</option>
+                  <option value="countdown">Countdown</option>
+                </select>
+              </label>
+              <label>
+                Baslik
+                <input id="assetTitle" type="text" placeholder="Orn: Birazdan geri donuyoruz" />
+              </label>
+              <label class="full">
+                Ana Metin
+                <textarea id="assetText" placeholder="Kartta gosterilecek metin"></textarea>
+              </label>
+              <label class="full">
+                Medya URL
+                <input id="assetMedia" type="text" placeholder="https://... ya da local file secimi icin asagiyi kullan" />
+              </label>
+              <label>
+                Tema
+                <select id="assetTheme">
+                  <option value="neon">Neon Gece</option>
+                  <option value="chalk">Kara Tahta</option>
+                  <option value="warm">Ates Gecisi</option>
+                  <option value="minimal">Temiz Beyaz</option>
+                </select>
+              </label>
+              <label>
+                Sure
+                <input id="assetDuration" type="number" min="0" value="0" />
+              </label>
+              <label>
+                Grup
+                <input id="assetGroup" type="text" placeholder="Orn: Mola, Sponsor, Gundem" />
+              </label>
+              <label>
+                Gecis
+                <select id="assetTransition">
+                  <option value="fade">Fade</option>
+                  <option value="slide-up">Slide Up</option>
+                  <option value="zoom">Zoom</option>
+                </select>
+              </label>
+              <label class="full">
+                Yerel Dosya
+                <input id="assetFile" type="file" accept="image/*,video/*" />
+              </label>
+            </div>
+            <div class="button-row">
+              <button id="saveAsset" class="primary-button">Karta Ekle</button>
+              <button id="clearForm" class="secondary-button">Temizle</button>
+            </div>
+            <p class="hint">
+              Ipucu: `1-9` tuslari ilk dokuz karti yayina verir. `Space` yayini temizler.
+            </p>
+          </div>
+
+          <div class="panel">
+            <p class="panel-kicker">Canli Onizleme</p>
+            <h2>Deck icinde test et</h2>
+            <div class="preview-shell">
+              <iframe
+                id="overlayPreview"
+                title="Overlay Preview"
+                src="./index.html?mode=overlay"
+              ></iframe>
+            </div>
+          </div>
+        </section>
+
+        <section class="assets-column">
+          <div class="panel">
+            <div class="section-head">
+              <div>
+                <p class="panel-kicker">Yayin Kartlari</p>
+                <h2>Hazir varliklar</h2>
+              </div>
+              <div class="topbar-actions">
+                <select id="groupFilter">
+                  <option value="all">Tum Gruplar</option>
+                </select>
+                <button id="clearAllAssets" class="secondary-button">Tumunu Sil</button>
+              </div>
+            </div>
+            <div id="assetList" class="asset-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="overlayRoot" class="overlay-root" hidden>
+      <div id="overlayStage" class="overlay-stage">
+        <div id="overlayCard" class="overlay-card theme-neon is-hidden">
+          <div class="overlay-media-wrap" id="overlayMediaWrap">
+            <img id="overlayImage" class="overlay-image" alt="" />
+            <video id="overlayVideo" class="overlay-video" playsinline></video>
+          </div>
+          <div class="overlay-copy" id="overlayCopy">
+            <p id="overlayEyebrow" class="overlay-eyebrow">Canli Yayin</p>
+            <h2 id="overlayTitle"></h2>
+            <p id="overlayText"></p>
+          </div>
+        </div>
+
+        <div id="tickerBar" class="ticker-bar is-hidden">
+          <div id="tickerContent" class="ticker-content"></div>
+        </div>
+        <div id="countdownBox" class="countdown-box is-hidden">
+          <p id="countdownLabel" class="countdown-label">Yayin birazdan basliyor</p>
+          <div id="countdownTime" class="countdown-time">05:00</div>
+        </div>
+      </div>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+  </html>

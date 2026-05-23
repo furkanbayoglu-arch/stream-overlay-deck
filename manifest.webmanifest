@@ -1,0 +1,9 @@
+{
+  "name": "Yayinci Gorsel Kontrol Masasi",
+  "short_name": "Stream Deck",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0d1118",
+  "theme_color": "#141821",
+  "icons": []
+}
