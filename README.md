@@ -17,6 +17,7 @@ https://furkanbayoglu-arch.github.io/stream-overlay-deck/
 - Rundown queue with previous/next controls
 - Basic OBS WebSocket scene switching panel
 - OBS source show/hide controls
+- OBS input/source list fetching
 - Scene + source + asset presets
 - PWA-ready manifest and service worker
 

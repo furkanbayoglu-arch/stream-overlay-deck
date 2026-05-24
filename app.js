@@ -50,7 +50,8 @@ const state = {
     connected: false,
     messageId: 0,
     pending: new Map(),
-    scenes: []
+    scenes: [],
+    inputs: []
   }
 };
 
@@ -555,6 +556,23 @@ async function populateObsScenes() {
   }
 }
 
+async function populateObsInputs() {
+  try {
+    const response = await obsRequest("GetInputList");
+    const inputs = response?.responseData?.inputs || [];
+    state.obs.inputs = inputs;
+    const select = document.getElementById("obsSourceSelect");
+    if (!select) {
+      return;
+    }
+    select.innerHTML = `<option value="">Source secin</option>${inputs
+      .map((input) => `<option value="${input.inputName}">${input.inputName}</option>`)
+      .join("")}`;
+  } catch (error) {
+    updateObsStatus(`Source listesi okunamadi: ${error.message}`);
+  }
+}
+
 async function connectObs() {
   const host = document.getElementById("obsHost")?.value.trim() || "127.0.0.1:4455";
   const password = document.getElementById("obsPassword")?.value || "";
@@ -591,6 +609,7 @@ async function connectObs() {
       state.obs.connected = true;
       updateObsStatus("OBS baglandi");
       populateObsScenes();
+      populateObsInputs();
       return;
     }
 
@@ -693,7 +712,13 @@ function setupDeckMode() {
     window.open("./index.html?mode=overlay", "_blank", "noopener,noreferrer");
   });
   document.getElementById("obsConnect")?.addEventListener("click", connectObs);
-  document.getElementById("obsRefreshScenes")?.addEventListener("click", populateObsScenes);
+  document.getElementById("obsRefreshScenes")?.addEventListener("click", () => {
+    populateObsScenes();
+    populateObsInputs();
+  });
+  document.getElementById("obsSourceSelect")?.addEventListener("change", (event) => {
+    document.getElementById("obsSourceName").value = event.target.value;
+  });
   document.getElementById("obsSwitchScene")?.addEventListener("click", switchObsScene);
   document.getElementById("obsShowSource")?.addEventListener("click", () => setObsSourceEnabled(true));
   document.getElementById("obsHideSource")?.addEventListener("click", () => setObsSourceEnabled(false));
