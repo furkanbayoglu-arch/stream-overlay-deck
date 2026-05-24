@@ -35,6 +35,22 @@ body {
   margin: 14px auto;
 }
 
+.remote-app {
+  width: min(920px, calc(100vw - 24px));
+  margin: 12px auto;
+}
+
+.remote-topbar {
+  align-items: center;
+}
+
+.remote-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;

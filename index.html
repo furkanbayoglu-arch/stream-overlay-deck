@@ -138,11 +138,17 @@
                   <option value="">Scene secin</option>
                 </select>
               </label>
+              <label class="full">
+                Source Adi
+                <input id="obsSourceName" type="text" placeholder="Orn: Browser Overlay" />
+              </label>
             </div>
             <div class="button-row">
               <button id="obsConnect" class="primary-button">OBS Baglan</button>
               <button id="obsRefreshScenes" class="secondary-button">Scene Yenile</button>
               <button id="obsSwitchScene" class="secondary-button">Scene Gec</button>
+              <button id="obsShowSource" class="secondary-button">Source Goster</button>
+              <button id="obsHideSource" class="secondary-button">Source Gizle</button>
             </div>
             <p id="obsStatus" class="hint">Bagli degil</p>
           </div>
@@ -179,6 +185,40 @@
             </div>
             <div id="rundownList" class="asset-list"></div>
           </div>
+
+          <div class="panel">
+            <div class="section-head">
+              <div>
+                <p class="panel-kicker">Presetler</p>
+                <h2>Scene + kart kombinasyonlari</h2>
+              </div>
+              <button id="savePreset" class="secondary-button">Preset Kaydet</button>
+            </div>
+            <div id="presetList" class="asset-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="remoteApp" class="remote-app" hidden>
+      <header class="topbar remote-topbar">
+        <div>
+          <p class="eyebrow">Remote</p>
+          <h1>Yayin Kumandasi</h1>
+        </div>
+        <div class="topbar-actions">
+          <button id="remoteNext" class="primary-button">Siradaki</button>
+          <button id="remoteClear" class="secondary-button">Temizle</button>
+        </div>
+      </header>
+      <main class="remote-layout">
+        <section class="panel">
+          <p class="panel-kicker">Hazir Kartlar</p>
+          <div id="remoteAssetList" class="asset-list"></div>
+        </section>
+        <section class="panel">
+          <p class="panel-kicker">Rundown</p>
+          <div id="remoteRundownList" class="asset-list"></div>
         </section>
       </main>
     </div>

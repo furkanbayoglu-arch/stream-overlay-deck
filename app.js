@@ -1,8 +1,11 @@
 const STORAGE_KEY = "stream-overlay-deck-assets-v1";
+const PRESET_STORAGE_KEY = "stream-overlay-deck-presets-v1";
 const CHANNEL_NAME = "stream-overlay-live-channel";
 const HOTKEY_LIMIT = 9;
 
-const isOverlayMode = new URLSearchParams(window.location.search).get("mode") === "overlay";
+const mode = new URLSearchParams(window.location.search).get("mode");
+const isOverlayMode = mode === "overlay";
+const isRemoteMode = mode === "remote";
 const channel = new BroadcastChannel(CHANNEL_NAME);
 
 const defaultAssets = [
@@ -41,6 +44,7 @@ const state = {
   overlayAudioContext: null,
   rundown: [],
   rundownIndex: -1,
+  presets: [],
   obs: {
     socket: null,
     connected: false,
@@ -65,8 +69,25 @@ function loadAssets() {
   }
 }
 
+function loadPresets() {
+  const raw = localStorage.getItem(PRESET_STORAGE_KEY);
+  if (!raw) {
+    state.presets = [];
+    return;
+  }
+  try {
+    state.presets = JSON.parse(raw);
+  } catch {
+    state.presets = [];
+  }
+}
+
 function persistAssets() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.assets));
+}
+
+function persistPresets() {
+  localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(state.presets));
 }
 
 function createFileURL(file) {
@@ -131,6 +152,7 @@ function moveAsset(fromIndex, toIndex) {
   state.assets.splice(toIndex, 0, item);
   persistAssets();
   renderAssetList();
+  renderRemoteLists();
 }
 
 function renderAssetList() {
@@ -189,12 +211,14 @@ function renderAssetList() {
       if (action === "queue") {
         state.rundown.push(assetId);
         renderRundown();
+        renderRemoteLists();
         return;
       }
       if (action === "delete") {
         state.assets.splice(index, 1);
         persistAssets();
         renderAssetList();
+        renderRemoteLists();
         return;
       }
       if (action === "up") {
@@ -265,7 +289,112 @@ function renderRundown() {
           state.rundownIndex = state.rundown.length - 1;
         }
         renderRundown();
+        renderRemoteLists();
       }
+    });
+  });
+}
+
+function renderPresetList() {
+  const presetList = document.getElementById("presetList");
+  if (!presetList) {
+    return;
+  }
+  presetList.innerHTML = "";
+  state.presets.forEach((preset, index) => {
+    const item = document.createElement("article");
+    item.className = "asset-card";
+    item.innerHTML = `
+      <div class="asset-meta">
+        <div class="section-head">
+          <div class="hotkey-badge">${index + 1}</div>
+          <div>
+            <h3>${preset.name}</h3>
+            <p>${preset.sceneName || "Scene yok"} • ${preset.assetTitle || "Kart yok"}</p>
+          </div>
+        </div>
+      </div>
+      <div class="asset-actions">
+        <button class="primary-button" data-preset-action="run" data-index="${index}">Calistir</button>
+        <button class="secondary-button" data-preset-action="delete" data-index="${index}">Sil</button>
+      </div>
+    `;
+    presetList.appendChild(item);
+  });
+
+  presetList.querySelectorAll("button[data-preset-action]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const index = Number(button.dataset.index);
+      const preset = state.presets[index];
+      if (!preset) {
+        return;
+      }
+      if (button.dataset.presetAction === "delete") {
+        state.presets.splice(index, 1);
+        persistPresets();
+        renderPresetList();
+        return;
+      }
+      await runPreset(preset);
+    });
+  });
+}
+
+function renderRemoteLists() {
+  const remoteAssetList = document.getElementById("remoteAssetList");
+  const remoteRundownList = document.getElementById("remoteRundownList");
+  if (!remoteAssetList || !remoteRundownList) {
+    return;
+  }
+
+  remoteAssetList.innerHTML = "";
+  state.assets.slice(0, 12).forEach((asset) => {
+    const item = document.createElement("article");
+    item.className = "asset-card";
+    item.innerHTML = `
+      <div class="asset-meta">
+        <h3>${asset.title}</h3>
+        <p>${asset.group || "Genel"} • ${asset.layer || "main"}</p>
+      </div>
+      <div class="asset-actions">
+        <button class="primary-button" data-remote-asset="${asset.id}">Goster</button>
+      </div>
+    `;
+    remoteAssetList.appendChild(item);
+  });
+
+  remoteRundownList.innerHTML = "";
+  state.rundown.forEach((assetId, index) => {
+    const asset = state.assets.find((entry) => entry.id === assetId);
+    if (!asset) {
+      return;
+    }
+    const item = document.createElement("article");
+    item.className = `asset-card ${index === state.rundownIndex ? "is-current" : ""}`;
+    item.innerHTML = `
+      <div class="asset-meta">
+        <h3>${asset.title}</h3>
+        <p>${asset.group || "Genel"} • ${asset.layer || "main"}</p>
+      </div>
+      <div class="asset-actions">
+        <button class="primary-button" data-remote-rundown="${index}">Calistir</button>
+      </div>
+    `;
+    remoteRundownList.appendChild(item);
+  });
+
+  remoteAssetList.querySelectorAll("button[data-remote-asset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const asset = state.assets.find((entry) => entry.id === button.dataset.remoteAsset);
+      if (asset) {
+        activateAsset(asset);
+      }
+    });
+  });
+
+  remoteRundownList.querySelectorAll("button[data-remote-rundown]").forEach((button) => {
+    button.addEventListener("click", () => {
+      playRundownIndex(Number(button.dataset.remoteRundown));
     });
   });
 }
@@ -279,6 +408,7 @@ function playRundownIndex(index) {
   state.rundownIndex = index;
   activateAsset(asset);
   renderRundown();
+  renderRemoteLists();
 }
 
 function nextRundown(step) {
@@ -308,6 +438,68 @@ function activateAsset(asset) {
 function clearOverlay() {
   state.activeAssetId = null;
   sendOverlayCommand({ type: "clear" });
+}
+
+async function setObsSourceEnabled(enabled) {
+  const sceneName = document.getElementById("obsSceneSelect")?.value;
+  const sourceName = document.getElementById("obsSourceName")?.value.trim();
+  if (!sceneName || !sourceName) {
+    updateObsStatus("Scene ve source adi girin");
+    return;
+  }
+  try {
+    const list = await obsRequest("GetSceneItemList", { sceneName });
+    const item = (list?.responseData?.sceneItems || []).find((entry) => entry.sourceName === sourceName);
+    if (!item) {
+      throw new Error("Source bulunamadi");
+    }
+    await obsRequest("SetSceneItemEnabled", {
+      sceneName,
+      sceneItemId: item.sceneItemId,
+      sceneItemEnabled: enabled
+    });
+    updateObsStatus(`${sourceName} ${enabled ? "acildi" : "gizlendi"}`);
+  } catch (error) {
+    updateObsStatus(`Source islemi olmadi: ${error.message}`);
+  }
+}
+
+function savePreset() {
+  const sceneName = document.getElementById("obsSceneSelect")?.value || "";
+  const sourceName = document.getElementById("obsSourceName")?.value.trim() || "";
+  const activeAsset = state.assets.find((asset) => asset.id === state.activeAssetId) || state.assets[0];
+  const preset = {
+    id: crypto.randomUUID(),
+    name: `${sceneName || "Scene"} / ${activeAsset?.title || "Kart"}`,
+    sceneName,
+    sourceName,
+    assetId: activeAsset?.id || "",
+    assetTitle: activeAsset?.title || ""
+  };
+  state.presets.unshift(preset);
+  persistPresets();
+  renderPresetList();
+}
+
+async function runPreset(preset) {
+  if (preset.sceneName) {
+    const sceneSelect = document.getElementById("obsSceneSelect");
+    if (sceneSelect) {
+      sceneSelect.value = preset.sceneName;
+    }
+    await switchObsScene();
+  }
+  if (preset.sourceName) {
+    const sourceInput = document.getElementById("obsSourceName");
+    if (sourceInput) {
+      sourceInput.value = preset.sourceName;
+    }
+    await setObsSourceEnabled(true);
+  }
+  const asset = state.assets.find((entry) => entry.id === preset.assetId);
+  if (asset) {
+    activateAsset(asset);
+  }
 }
 
 function updateObsStatus(text) {
@@ -459,6 +651,7 @@ async function addAssetFromForm() {
   persistAssets();
   refreshGroupFilter();
   renderAssetList();
+  renderRemoteLists();
   clearForm();
 }
 
@@ -475,9 +668,12 @@ function downloadOfflineHtml() {
 
 function setupDeckMode() {
   loadAssets();
+  loadPresets();
   refreshGroupFilter();
   renderAssetList();
   renderRundown();
+  renderPresetList();
+  renderRemoteLists();
 
   document.getElementById("saveAsset").addEventListener("click", addAssetFromForm);
   document.getElementById("clearForm").addEventListener("click", clearForm);
@@ -485,6 +681,7 @@ function setupDeckMode() {
     state.assets = [];
     persistAssets();
     renderAssetList();
+    renderRemoteLists();
     clearOverlay();
   });
   document.getElementById("downloadHtml").addEventListener("click", downloadOfflineHtml);
@@ -498,13 +695,17 @@ function setupDeckMode() {
   document.getElementById("obsConnect")?.addEventListener("click", connectObs);
   document.getElementById("obsRefreshScenes")?.addEventListener("click", populateObsScenes);
   document.getElementById("obsSwitchScene")?.addEventListener("click", switchObsScene);
+  document.getElementById("obsShowSource")?.addEventListener("click", () => setObsSourceEnabled(true));
+  document.getElementById("obsHideSource")?.addEventListener("click", () => setObsSourceEnabled(false));
   document.getElementById("clearRundown")?.addEventListener("click", () => {
     state.rundown = [];
     state.rundownIndex = -1;
     renderRundown();
+    renderRemoteLists();
   });
   document.getElementById("rundownNext")?.addEventListener("click", () => nextRundown(1));
   document.getElementById("rundownPrev")?.addEventListener("click", () => nextRundown(-1));
+  document.getElementById("savePreset")?.addEventListener("click", savePreset);
 
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
@@ -544,6 +745,27 @@ function setupDeckMode() {
   });
 
   channel.postMessage({ type: "sync-request" });
+}
+
+function setupRemoteMode() {
+  loadAssets();
+  loadPresets();
+  document.getElementById("deckApp").hidden = true;
+  document.getElementById("remoteApp").hidden = false;
+  renderRemoteLists();
+
+  document.getElementById("remoteNext")?.addEventListener("click", () => nextRundown(1));
+  document.getElementById("remoteClear")?.addEventListener("click", clearOverlay);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.code === "Space") {
+      event.preventDefault();
+      clearOverlay();
+    }
+    if (event.key === "Enter") {
+      nextRundown(1);
+    }
+  });
 }
 
 function hideAllOverlayMedia() {
@@ -752,6 +974,8 @@ if ("serviceWorker" in navigator && !isOverlayMode) {
 
 if (isOverlayMode) {
   setupOverlayMode();
+} else if (isRemoteMode) {
+  setupRemoteMode();
 } else {
   setupDeckMode();
 }

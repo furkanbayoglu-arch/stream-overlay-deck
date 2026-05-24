@@ -9,12 +9,15 @@ https://furkanbayoglu-arch.github.io/stream-overlay-deck/
 ## Features
 
 - Deck mode and clean overlay mode with `?mode=overlay`
+- Remote control mode with `?mode=remote`
 - BroadcastChannel communication between control panel and overlay
 - Cards for slides, images, videos, ticker, break screen, and countdown
 - Asset groups and quick filtering
 - Layer support: `background`, `main`, `lower-third`
 - Rundown queue with previous/next controls
 - Basic OBS WebSocket scene switching panel
+- OBS source show/hide controls
+- Scene + source + asset presets
 - PWA-ready manifest and service worker
 
 ## Local run
@@ -29,6 +32,7 @@ Open:
 ```text
 Deck:    http://127.0.0.1:8139
 Overlay: http://127.0.0.1:8139/index.html?mode=overlay
+Remote:  http://127.0.0.1:8139/index.html?mode=remote
 ```
 
 ## OBS usage
