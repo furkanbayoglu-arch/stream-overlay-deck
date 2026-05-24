@@ -38,6 +38,7 @@ const defaultAssets = [
 const state = {
   assets: [],
   activeAssetId: null,
+  selectedAssetId: null,
   deferredPrompt: null,
   activeGroup: "all",
   countdownTimer: null,
@@ -173,6 +174,61 @@ function saveDeckFormState() {
   };
 }
 
+function getSelectedAsset() {
+  return state.assets.find((asset) => asset.id === state.selectedAssetId) || null;
+}
+
+function updateQuickEditStatus(text) {
+  const node = document.getElementById("quickEditStatus");
+  if (node) {
+    node.textContent = text;
+  }
+}
+
+function syncQuickEditor() {
+  const asset = getSelectedAsset();
+  const title = document.getElementById("quickEditTitle");
+  const text = document.getElementById("quickEditText");
+  const group = document.getElementById("quickEditGroup");
+  const duration = document.getElementById("quickEditDuration");
+  const apply = document.getElementById("quickEditApply");
+  const show = document.getElementById("quickEditShow");
+
+  if (!title || !text || !group || !duration || !apply || !show) {
+    return;
+  }
+
+  if (!asset) {
+    title.value = "";
+    text.value = "";
+    group.value = "";
+    duration.value = "0";
+    apply.disabled = true;
+    show.disabled = true;
+    updateQuickEditStatus("Duzenlemek icin kart listesinden bir kart secin.");
+    return;
+  }
+
+  title.value = asset.title || "";
+  text.value = asset.text || "";
+  group.value = asset.group || "";
+  duration.value = String(asset.duration || 0);
+  apply.disabled = false;
+  show.disabled = false;
+  updateQuickEditStatus(
+    state.activeAssetId === asset.id
+      ? `Secili kart su an yayinda: ${asset.title}`
+      : `Secili kart hazir: ${asset.title}`
+  );
+}
+
+function selectAsset(assetId) {
+  state.selectedAssetId = assetId;
+  renderAssetList();
+  renderRemoteLists();
+  syncQuickEditor();
+}
+
 function clearForm() {
   document.getElementById("assetType").value = "slide";
   document.getElementById("assetTitle").value = "";
@@ -215,7 +271,14 @@ function renderAssetList() {
   visibleAssets.forEach((asset) => {
     const index = state.assets.findIndex((entry) => entry.id === asset.id);
     const card = document.createElement("article");
-    card.className = "asset-card";
+    const cardClasses = ["asset-card"];
+    if (asset.id === state.activeAssetId) {
+      cardClasses.push("is-current");
+    }
+    if (asset.id === state.selectedAssetId) {
+      cardClasses.push("is-selected");
+    }
+    card.className = cardClasses.join(" ");
     card.innerHTML = `
       <div class="asset-meta">
         <div class="section-head">
@@ -236,6 +299,7 @@ function renderAssetList() {
       </div>
       <div class="asset-actions">
         <button class="primary-button" data-action="show" data-id="${asset.id}">Yayina Ver</button>
+        <button class="secondary-button" data-action="edit" data-id="${asset.id}">Duzenle</button>
         <button class="secondary-button" data-action="queue" data-id="${asset.id}">Rundown</button>
         <button class="secondary-button" data-action="up" data-id="${asset.id}">Yukari</button>
         <button class="secondary-button" data-action="down" data-id="${asset.id}">Asagi</button>
@@ -258,6 +322,10 @@ function renderAssetList() {
         activateAsset(state.assets[index]);
         return;
       }
+      if (action === "edit") {
+        selectAsset(assetId);
+        return;
+      }
       if (action === "queue") {
         state.rundown.push(assetId);
         renderRundown();
@@ -265,10 +333,17 @@ function renderAssetList() {
         return;
       }
       if (action === "delete") {
+        if (state.selectedAssetId === assetId) {
+          state.selectedAssetId = null;
+        }
+        if (state.activeAssetId === assetId) {
+          state.activeAssetId = null;
+        }
         state.assets.splice(index, 1);
         persistAssets();
         renderAssetList();
         renderRemoteLists();
+        syncQuickEditor();
         return;
       }
       if (action === "up") {
@@ -485,10 +560,15 @@ function nextRundown(step) {
 
 function activateAsset(asset) {
   state.activeAssetId = asset.id;
+  if (!state.selectedAssetId) {
+    state.selectedAssetId = asset.id;
+  }
   sendOverlayCommand({
     type: "show",
     payload: asset
   });
+  renderAssetList();
+  syncQuickEditor();
 
   if (asset.duration > 0) {
     window.setTimeout(() => {
@@ -503,6 +583,8 @@ function clearOverlay() {
   state.activeAssetId = null;
   clearRundownAutoplayTimer();
   sendOverlayCommand({ type: "clear" });
+  renderAssetList();
+  syncQuickEditor();
 }
 
 async function setObsSourceEnabled(enabled) {
@@ -790,11 +872,49 @@ async function addAssetFromForm() {
   }
 
   state.assets.unshift(asset);
+  state.selectedAssetId = asset.id;
   persistAssets();
   refreshGroupFilter();
   renderAssetList();
   renderRemoteLists();
   clearForm();
+  syncQuickEditor();
+}
+
+function applyQuickEdit() {
+  const asset = getSelectedAsset();
+  if (!asset) {
+    updateQuickEditStatus("Duzenlenecek kart secili degil.");
+    return;
+  }
+
+  asset.title = document.getElementById("quickEditTitle")?.value.trim() || asset.title;
+  asset.text = document.getElementById("quickEditText")?.value.trim() || "";
+  asset.group = document.getElementById("quickEditGroup")?.value.trim() || "Genel";
+  asset.duration = Math.max(0, Number(document.getElementById("quickEditDuration")?.value || 0));
+
+  persistAssets();
+  refreshGroupFilter();
+  renderAssetList();
+  renderRundown();
+  renderRemoteLists();
+  syncQuickEditor();
+
+  if (state.activeAssetId === asset.id) {
+    sendOverlayCommand({
+      type: "show",
+      payload: asset
+    });
+    updateQuickEditStatus(`Yayindaki kart guncellendi: ${asset.title}`);
+  } else {
+    updateQuickEditStatus(`Kart guncellendi: ${asset.title}`);
+  }
+}
+
+function clearQuickEditSelection() {
+  state.selectedAssetId = null;
+  renderAssetList();
+  syncQuickEditor();
 }
 
 function downloadOfflineHtml() {
@@ -833,6 +953,7 @@ function setupDeckMode() {
   renderRemoteLists();
   updateRundownAutoplayStatus();
   syncObsIndicators();
+  syncQuickEditor();
 
   document.getElementById("saveAsset").addEventListener("click", addAssetFromForm);
   document.getElementById("clearForm").addEventListener("click", clearForm);
@@ -884,6 +1005,14 @@ function setupDeckMode() {
     updateRundownAutoplayStatus();
   });
   document.getElementById("savePreset")?.addEventListener("click", savePreset);
+  document.getElementById("quickEditApply")?.addEventListener("click", applyQuickEdit);
+  document.getElementById("quickEditShow")?.addEventListener("click", () => {
+    const asset = getSelectedAsset();
+    if (asset) {
+      activateAsset(asset);
+    }
+  });
+  document.getElementById("quickEditClear")?.addEventListener("click", clearQuickEditSelection);
 
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();

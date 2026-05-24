@@ -301,6 +301,11 @@ textarea {
   box-shadow: inset 0 0 0 1px rgba(102, 208, 255, 0.16);
 }
 
+.asset-card.is-selected {
+  outline: 1px solid rgba(255, 141, 95, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(255, 141, 95, 0.18);
+}
+
 .hotkey-badge {
   display: inline-flex;
   align-items: center;

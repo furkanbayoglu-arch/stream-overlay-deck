@@ -218,6 +218,39 @@
             </div>
             <div id="presetList" class="asset-list"></div>
           </div>
+
+          <div class="panel">
+            <div class="section-head">
+              <div>
+                <p class="panel-kicker">Hizli Duzenleme</p>
+                <h2>Secili karti canli guncelle</h2>
+              </div>
+              <button id="quickEditClear" class="secondary-button">Secimi Temizle</button>
+            </div>
+            <div class="form-grid">
+              <label class="full">
+                Baslik
+                <input id="quickEditTitle" type="text" placeholder="Duzenlemek icin bir kart secin" />
+              </label>
+              <label class="full">
+                Ana Metin
+                <textarea id="quickEditText" placeholder="Secili kart metni"></textarea>
+              </label>
+              <label>
+                Grup
+                <input id="quickEditGroup" type="text" placeholder="Genel" />
+              </label>
+              <label>
+                Sure
+                <input id="quickEditDuration" type="number" min="0" value="0" />
+              </label>
+            </div>
+            <div class="button-row">
+              <button id="quickEditApply" class="primary-button">Degisiklikleri Uygula</button>
+              <button id="quickEditShow" class="secondary-button">Tekrar Yayina Ver</button>
+            </div>
+            <p id="quickEditStatus" class="hint">Duzenlemek icin kart listesinden bir kart secin.</p>
+          </div>
         </section>
       </main>
     </div>

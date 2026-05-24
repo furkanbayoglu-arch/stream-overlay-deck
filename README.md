@@ -12,6 +12,7 @@ https://furkanbayoglu-arch.github.io/stream-overlay-deck/
 - Remote control mode with `?mode=remote`
 - BroadcastChannel communication between control panel and overlay
 - Cards for slides, images, videos, ticker, break screen, and countdown
+- Quick edit panel for updating a selected card while live
 - Asset groups and quick filtering
 - Layer support: `background`, `main`, `lower-third`
 - Rundown queue with previous/next controls
