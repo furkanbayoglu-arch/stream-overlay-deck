@@ -15,9 +15,11 @@ https://furkanbayoglu-arch.github.io/stream-overlay-deck/
 - Asset groups and quick filtering
 - Layer support: `background`, `main`, `lower-third`
 - Rundown queue with previous/next controls
+- Rundown autoplay with configurable wait gap
 - Basic OBS WebSocket scene switching panel
 - OBS source show/hide controls
 - OBS input/source list fetching
+- Live OBS program scene and source visibility status
 - Scene + source + asset presets
 - PWA-ready manifest and service worker
 

@@ -156,6 +156,16 @@
               <button id="obsShowSource" class="secondary-button">Source Goster</button>
               <button id="obsHideSource" class="secondary-button">Source Gizle</button>
             </div>
+            <div class="status-grid">
+              <div class="status-card">
+                <span class="status-label">Aktif Scene</span>
+                <strong id="obsCurrentScene">-</strong>
+              </div>
+              <div class="status-card">
+                <span class="status-label">Source Durumu</span>
+                <strong id="obsSourceState">Bilinmiyor</strong>
+              </div>
+            </div>
             <p id="obsStatus" class="hint">Bagli degil</p>
           </div>
         </section>
@@ -188,7 +198,13 @@
             <div class="button-row">
               <button id="rundownPrev" class="secondary-button">Onceki</button>
               <button id="rundownNext" class="primary-button">Siradaki</button>
+              <button id="rundownAutoToggle" class="secondary-button">Auto Oynat</button>
+              <label class="inline-control">
+                Bekleme sn
+                <input id="rundownGapSeconds" type="number" min="0" value="3" />
+              </label>
             </div>
+            <p id="rundownAutoStatus" class="hint">Otomatik oynatma kapali</p>
             <div id="rundownList" class="asset-list"></div>
           </div>
 
@@ -214,6 +230,7 @@
         </div>
         <div class="topbar-actions">
           <button id="remoteNext" class="primary-button">Siradaki</button>
+          <button id="remoteAutoToggle" class="secondary-button">Auto</button>
           <button id="remoteClear" class="secondary-button">Temizle</button>
         </div>
       </header>
@@ -224,6 +241,7 @@
         </section>
         <section class="panel">
           <p class="panel-kicker">Rundown</p>
+          <p id="remoteAutoStatus" class="hint">Otomatik oynatma kapali</p>
           <div id="remoteRundownList" class="asset-list"></div>
         </section>
       </main>

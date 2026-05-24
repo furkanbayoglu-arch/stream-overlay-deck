@@ -99,6 +99,17 @@ h2,
   flex-wrap: wrap;
 }
 
+.inline-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.inline-control input {
+  width: 84px;
+}
+
 button,
 input,
 textarea,
@@ -220,6 +231,29 @@ textarea {
   border-radius: 18px;
   background: var(--panel-soft);
   border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.status-card {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.status-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .asset-meta {
@@ -513,6 +547,10 @@ textarea {
   }
 
   .overlay-card {
+    grid-template-columns: 1fr;
+  }
+
+  .status-grid {
     grid-template-columns: 1fr;
   }
 }

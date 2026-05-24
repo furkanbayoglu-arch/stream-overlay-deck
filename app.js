@@ -41,6 +41,9 @@ const state = {
   deferredPrompt: null,
   activeGroup: "all",
   countdownTimer: null,
+  rundownAutoplayTimer: null,
+  rundownAutoplayEnabled: false,
+  rundownGapSeconds: 3,
   overlayAudioContext: null,
   rundown: [],
   rundownIndex: -1,
@@ -51,7 +54,9 @@ const state = {
     messageId: 0,
     pending: new Map(),
     scenes: [],
-    inputs: []
+    inputs: [],
+    currentScene: "",
+    currentSourceEnabled: null
   }
 };
 
@@ -89,6 +94,50 @@ function persistAssets() {
 
 function persistPresets() {
   localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(state.presets));
+}
+
+function clearRundownAutoplayTimer() {
+  if (state.rundownAutoplayTimer) {
+    window.clearTimeout(state.rundownAutoplayTimer);
+    state.rundownAutoplayTimer = null;
+  }
+}
+
+function updateRundownAutoplayStatus() {
+  const text = state.rundownAutoplayEnabled
+    ? `Otomatik oynatma acik • ${state.rundownGapSeconds}s bekleme`
+    : "Otomatik oynatma kapali";
+  const deckStatus = document.getElementById("rundownAutoStatus");
+  const remoteStatus = document.getElementById("remoteAutoStatus");
+  const toggle = document.getElementById("rundownAutoToggle");
+  const remoteToggle = document.getElementById("remoteAutoToggle");
+  if (deckStatus) {
+    deckStatus.textContent = text;
+  }
+  if (remoteStatus) {
+    remoteStatus.textContent = text;
+  }
+  if (toggle) {
+    toggle.textContent = state.rundownAutoplayEnabled ? "Auto Durdur" : "Auto Oynat";
+  }
+  if (remoteToggle) {
+    remoteToggle.textContent = state.rundownAutoplayEnabled ? "Auto Durdur" : "Auto";
+  }
+}
+
+function syncObsIndicators() {
+  const sceneNode = document.getElementById("obsCurrentScene");
+  const sourceNode = document.getElementById("obsSourceState");
+  if (sceneNode) {
+    sceneNode.textContent = state.obs.currentScene || "-";
+  }
+  if (sourceNode) {
+    if (state.obs.currentSourceEnabled === null) {
+      sourceNode.textContent = "Bilinmiyor";
+    } else {
+      sourceNode.textContent = state.obs.currentSourceEnabled ? "Gorunur" : "Gizli";
+    }
+  }
 }
 
 function createFileURL(file) {
@@ -410,6 +459,20 @@ function playRundownIndex(index) {
   activateAsset(asset);
   renderRundown();
   renderRemoteLists();
+
+  clearRundownAutoplayTimer();
+  if (state.rundownAutoplayEnabled) {
+    const waitSeconds = Math.max(0, Number(asset.duration || 0)) + Math.max(0, Number(state.rundownGapSeconds || 0));
+    const hasNext = index < state.rundown.length - 1;
+    if (hasNext) {
+      state.rundownAutoplayTimer = window.setTimeout(() => {
+        nextRundown(1);
+      }, Math.max(1, waitSeconds) * 1000);
+    } else {
+      state.rundownAutoplayEnabled = false;
+      updateRundownAutoplayStatus();
+    }
+  }
 }
 
 function nextRundown(step) {
@@ -438,6 +501,7 @@ function activateAsset(asset) {
 
 function clearOverlay() {
   state.activeAssetId = null;
+  clearRundownAutoplayTimer();
   sendOverlayCommand({ type: "clear" });
 }
 
@@ -459,9 +523,30 @@ async function setObsSourceEnabled(enabled) {
       sceneItemId: item.sceneItemId,
       sceneItemEnabled: enabled
     });
+    state.obs.currentSourceEnabled = enabled;
+    syncObsIndicators();
     updateObsStatus(`${sourceName} ${enabled ? "acildi" : "gizlendi"}`);
   } catch (error) {
     updateObsStatus(`Source islemi olmadi: ${error.message}`);
+  }
+}
+
+async function refreshObsSourceState() {
+  const sceneName = document.getElementById("obsSceneSelect")?.value;
+  const sourceName = document.getElementById("obsSourceName")?.value.trim();
+  if (!sceneName || !sourceName || !state.obs.connected) {
+    state.obs.currentSourceEnabled = null;
+    syncObsIndicators();
+    return;
+  }
+  try {
+    const list = await obsRequest("GetSceneItemList", { sceneName });
+    const item = (list?.responseData?.sceneItems || []).find((entry) => entry.sourceName === sourceName);
+    state.obs.currentSourceEnabled = item ? Boolean(item.sceneItemEnabled) : null;
+    syncObsIndicators();
+  } catch {
+    state.obs.currentSourceEnabled = null;
+    syncObsIndicators();
   }
 }
 
@@ -549,7 +634,9 @@ async function populateObsScenes() {
       .join("")}`;
     if (response?.responseData?.currentProgramSceneName) {
       select.value = response.responseData.currentProgramSceneName;
+      state.obs.currentScene = response.responseData.currentProgramSceneName;
     }
+    syncObsIndicators();
     updateObsStatus(`OBS bagli • ${scenes.length} scene`);
   } catch (error) {
     updateObsStatus(`Scene okunamadi: ${error.message}`);
@@ -568,6 +655,7 @@ async function populateObsInputs() {
     select.innerHTML = `<option value="">Source secin</option>${inputs
       .map((input) => `<option value="${input.inputName}">${input.inputName}</option>`)
       .join("")}`;
+    refreshObsSourceState();
   } catch (error) {
     updateObsStatus(`Source listesi okunamadi: ${error.message}`);
   }
@@ -598,6 +686,7 @@ async function connectObs() {
           op: 1,
           d: {
             rpcVersion: d.rpcVersion || 1,
+            eventSubscriptions: 1023,
             authentication
           }
         })
@@ -610,6 +699,32 @@ async function connectObs() {
       updateObsStatus("OBS baglandi");
       populateObsScenes();
       populateObsInputs();
+      return;
+    }
+
+    if (op === 5) {
+      const eventType = d.eventType;
+      if (eventType === "CurrentProgramSceneChanged") {
+        state.obs.currentScene = d.eventData?.sceneName || "";
+        const select = document.getElementById("obsSceneSelect");
+        if (select && state.obs.currentScene) {
+          select.value = state.obs.currentScene;
+        }
+        syncObsIndicators();
+      }
+      if (eventType === "SceneItemEnableStateChanged") {
+        const selectedScene = document.getElementById("obsSceneSelect")?.value;
+        const selectedSource = document.getElementById("obsSourceName")?.value.trim();
+        if (
+          selectedScene &&
+          selectedSource &&
+          d.eventData?.sceneName === selectedScene &&
+          d.eventData?.sourceName === selectedSource
+        ) {
+          state.obs.currentSourceEnabled = Boolean(d.eventData?.sceneItemEnabled);
+          syncObsIndicators();
+        }
+      }
       return;
     }
 
@@ -629,11 +744,17 @@ async function connectObs() {
 
   socket.addEventListener("close", () => {
     state.obs.connected = false;
+    state.obs.currentScene = "";
+    state.obs.currentSourceEnabled = null;
+    syncObsIndicators();
     updateObsStatus("OBS baglantisi kapandi");
   });
 
   socket.addEventListener("error", () => {
     state.obs.connected = false;
+    state.obs.currentScene = "";
+    state.obs.currentSourceEnabled = null;
+    syncObsIndicators();
     updateObsStatus("OBS baglanamadi");
   });
 }
@@ -646,6 +767,8 @@ async function switchObsScene() {
   }
   try {
     await obsRequest("SetCurrentProgramScene", { sceneName });
+    state.obs.currentScene = sceneName;
+    syncObsIndicators();
     updateObsStatus(`OBS scene aktif: ${sceneName}`);
   } catch (error) {
     updateObsStatus(`Scene gecisi olmadi: ${error.message}`);
@@ -685,6 +808,21 @@ function downloadOfflineHtml() {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
+function toggleRundownAutoplay(forceValue) {
+  state.rundownAutoplayEnabled = typeof forceValue === "boolean"
+    ? forceValue
+    : !state.rundownAutoplayEnabled;
+
+  if (!state.rundownAutoplayEnabled) {
+    clearRundownAutoplayTimer();
+  } else if (state.rundown.length) {
+    const startIndex = state.rundownIndex >= 0 ? state.rundownIndex : 0;
+    playRundownIndex(startIndex);
+  }
+
+  updateRundownAutoplayStatus();
+}
+
 function setupDeckMode() {
   loadAssets();
   loadPresets();
@@ -693,6 +831,8 @@ function setupDeckMode() {
   renderRundown();
   renderPresetList();
   renderRemoteLists();
+  updateRundownAutoplayStatus();
+  syncObsIndicators();
 
   document.getElementById("saveAsset").addEventListener("click", addAssetFromForm);
   document.getElementById("clearForm").addEventListener("click", clearForm);
@@ -716,20 +856,33 @@ function setupDeckMode() {
     populateObsScenes();
     populateObsInputs();
   });
+  document.getElementById("obsSceneSelect")?.addEventListener("change", (event) => {
+    state.obs.currentScene = event.target.value;
+    syncObsIndicators();
+    refreshObsSourceState();
+  });
   document.getElementById("obsSourceSelect")?.addEventListener("change", (event) => {
     document.getElementById("obsSourceName").value = event.target.value;
+    refreshObsSourceState();
   });
+  document.getElementById("obsSourceName")?.addEventListener("input", refreshObsSourceState);
   document.getElementById("obsSwitchScene")?.addEventListener("click", switchObsScene);
   document.getElementById("obsShowSource")?.addEventListener("click", () => setObsSourceEnabled(true));
   document.getElementById("obsHideSource")?.addEventListener("click", () => setObsSourceEnabled(false));
   document.getElementById("clearRundown")?.addEventListener("click", () => {
     state.rundown = [];
     state.rundownIndex = -1;
+    toggleRundownAutoplay(false);
     renderRundown();
     renderRemoteLists();
   });
   document.getElementById("rundownNext")?.addEventListener("click", () => nextRundown(1));
   document.getElementById("rundownPrev")?.addEventListener("click", () => nextRundown(-1));
+  document.getElementById("rundownAutoToggle")?.addEventListener("click", () => toggleRundownAutoplay());
+  document.getElementById("rundownGapSeconds")?.addEventListener("input", (event) => {
+    state.rundownGapSeconds = Math.max(0, Number(event.target.value || 0));
+    updateRundownAutoplayStatus();
+  });
   document.getElementById("savePreset")?.addEventListener("click", savePreset);
 
   window.addEventListener("beforeinstallprompt", (event) => {
@@ -778,8 +931,10 @@ function setupRemoteMode() {
   document.getElementById("deckApp").hidden = true;
   document.getElementById("remoteApp").hidden = false;
   renderRemoteLists();
+  updateRundownAutoplayStatus();
 
   document.getElementById("remoteNext")?.addEventListener("click", () => nextRundown(1));
+  document.getElementById("remoteAutoToggle")?.addEventListener("click", () => toggleRundownAutoplay());
   document.getElementById("remoteClear")?.addEventListener("click", clearOverlay);
 
   document.addEventListener("keydown", (event) => {
