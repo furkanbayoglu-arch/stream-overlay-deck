@@ -221,8 +221,14 @@
                 <p class="panel-kicker">Presetler</p>
                 <h2>Scene + kart kombinasyonlari</h2>
               </div>
-              <button id="savePreset" class="secondary-button">Preset Kaydet</button>
+              <div class="topbar-actions">
+                <select id="presetSceneFilter">
+                  <option value="all">Tum Scene'ler</option>
+                </select>
+                <button id="savePreset" class="secondary-button">Preset Kaydet</button>
+              </div>
             </div>
+            <div id="favoritePresetBar" class="asset-list compact-list"></div>
             <div id="presetList" class="asset-list"></div>
           </div>
 

@@ -42,6 +42,7 @@ const state = {
   selectedAssetId: null,
   deferredPrompt: null,
   activeGroup: "all",
+  activePresetScene: "all",
   countdownTimer: null,
   rundownAutoplayTimer: null,
   rundownAutoplayEnabled: false,
@@ -110,6 +111,24 @@ function persistAssets() {
 
 function persistPresets() {
   localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(state.presets));
+}
+
+function refreshPresetSceneFilter() {
+  const select = document.getElementById("presetSceneFilter");
+  if (!select) {
+    return;
+  }
+  const scenes = [...new Set(state.presets.map((preset) => preset.sceneName || "Scene yok"))].sort();
+  const previous = state.activePresetScene;
+  select.innerHTML = `<option value="all">Tum Scene'ler</option>${scenes
+    .map((scene) => `<option value="${scene}">${scene}</option>`)
+    .join("")}`;
+  if (previous !== "all" && scenes.includes(previous)) {
+    select.value = previous;
+  } else {
+    select.value = "all";
+    state.activePresetScene = "all";
+  }
 }
 
 function persistTemplates() {
@@ -483,13 +502,46 @@ function renderRundown() {
 
 function renderPresetList() {
   const presetList = document.getElementById("presetList");
+  const favoritePresetBar = document.getElementById("favoritePresetBar");
   if (!presetList) {
     return;
   }
   presetList.innerHTML = "";
-  state.presets.forEach((preset, index) => {
+  if (favoritePresetBar) {
+    favoritePresetBar.innerHTML = "";
+  }
+
+  const visiblePresets = state.activePresetScene === "all"
+    ? state.presets
+    : state.presets.filter((preset) => (preset.sceneName || "Scene yok") === state.activePresetScene);
+
+  const favoritePresets = visiblePresets.filter((preset) => preset.favorite);
+  if (favoritePresetBar) {
+    if (!favoritePresets.length) {
+      favoritePresetBar.innerHTML = `<article class="asset-card"><div class="asset-meta"><h3>Favori preset yok</h3><p>Yildiz ile favoriye alip hizli bar'da gosterebilirsiniz.</p></div></article>`;
+    } else {
+      favoritePresets.forEach((preset) => {
+        const originalIndex = state.presets.findIndex((entry) => entry.id === preset.id);
+        const item = document.createElement("article");
+        item.className = "asset-card is-favorite";
+        item.innerHTML = `
+          <div class="asset-meta">
+            <h3>${preset.name}</h3>
+            <p>${preset.sceneName || "Scene yok"} • ${preset.assetTitle || "Kart yok"}</p>
+          </div>
+          <div class="asset-actions">
+            <button class="primary-button" data-favorite-preset-run="${originalIndex}">Calistir</button>
+          </div>
+        `;
+        favoritePresetBar.appendChild(item);
+      });
+    }
+  }
+
+  visiblePresets.forEach((preset) => {
+    const index = state.presets.findIndex((entry) => entry.id === preset.id);
     const item = document.createElement("article");
-    item.className = "asset-card";
+    item.className = `asset-card ${preset.favorite ? "is-favorite" : ""}`;
     item.innerHTML = `
       <div class="asset-meta">
         <div class="section-head">
@@ -501,6 +553,7 @@ function renderPresetList() {
         </div>
       </div>
       <div class="asset-actions">
+        <button class="secondary-button" data-preset-action="favorite" data-index="${index}">${preset.favorite ? "Yildizi Kaldir" : "Favori"}</button>
         <button class="primary-button" data-preset-action="run" data-index="${index}">Calistir</button>
         <button class="secondary-button" data-preset-action="delete" data-index="${index}">Sil</button>
       </div>
@@ -515,13 +568,30 @@ function renderPresetList() {
       if (!preset) {
         return;
       }
+      if (button.dataset.presetAction === "favorite") {
+        preset.favorite = !preset.favorite;
+        persistPresets();
+        refreshPresetSceneFilter();
+        renderPresetList();
+        return;
+      }
       if (button.dataset.presetAction === "delete") {
         state.presets.splice(index, 1);
         persistPresets();
+        refreshPresetSceneFilter();
         renderPresetList();
         return;
       }
       await runPreset(preset);
+    });
+  });
+
+  favoritePresetBar?.querySelectorAll("button[data-favorite-preset-run]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const preset = state.presets[Number(button.dataset.favoritePresetRun)];
+      if (preset) {
+        await runPreset(preset);
+      }
     });
   });
 }
@@ -769,10 +839,12 @@ function savePreset() {
     sceneName,
     sourceName,
     assetId: activeAsset?.id || "",
-    assetTitle: activeAsset?.title || ""
+    assetTitle: activeAsset?.title || "",
+    favorite: false
   };
   state.presets.unshift(preset);
   persistPresets();
+  refreshPresetSceneFilter();
   renderPresetList();
 }
 
@@ -1209,6 +1281,7 @@ function setupDeckMode() {
   loadPresets();
   loadTemplates();
   refreshGroupFilter();
+  refreshPresetSceneFilter();
   renderAssetList();
   renderRundown();
   renderPresetList();
@@ -1232,6 +1305,10 @@ function setupDeckMode() {
   document.getElementById("groupFilter").addEventListener("change", (event) => {
     state.activeGroup = event.target.value;
     renderAssetList();
+  });
+  document.getElementById("presetSceneFilter")?.addEventListener("change", (event) => {
+    state.activePresetScene = event.target.value;
+    renderPresetList();
   });
   document.getElementById("openOverlayWindow").addEventListener("click", () => {
     window.open("./index.html?mode=overlay", "_blank", "noopener,noreferrer");

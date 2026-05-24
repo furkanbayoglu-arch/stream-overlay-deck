@@ -15,6 +15,7 @@ https://furkanbayoglu-arch.github.io/stream-overlay-deck/
 - Quick edit panel for updating a selected card while live
 - Duplicate actions and reusable saved templates
 - Live ticker text updates and rundown JSON import/export
+- Scene-filtered presets with a favorites quick bar
 - Asset groups and quick filtering
 - Layer support: `background`, `main`, `lower-third`
 - Rundown queue with previous/next controls
