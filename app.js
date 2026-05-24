@@ -36,6 +36,41 @@ const defaultAssets = [
   }
 ];
 
+const lowerThirdQuickTemplates = {
+  guest: {
+    title: "Konuk Adi",
+    text: "Gorev / Unvan",
+    theme: "minimal",
+    group: "Lower Third",
+    transition: "slide-up",
+    layer: "lower-third"
+  },
+  topic: {
+    title: "Bugunun Konusu",
+    text: "Ana baslik veya tartisma maddesi",
+    theme: "neon",
+    group: "Lower Third",
+    transition: "slide-up",
+    layer: "lower-third"
+  },
+  cta: {
+    title: "Bizi Takip Edin",
+    text: "@kanaladi • abone ol • bildirimleri ac",
+    theme: "minimal",
+    group: "CTA",
+    transition: "fade",
+    layer: "lower-third"
+  },
+  breaking: {
+    title: "Son Dakika",
+    text: "Yeni gelisme ekrana geliyor",
+    theme: "warm",
+    group: "Breaking",
+    transition: "zoom",
+    layer: "lower-third"
+  }
+};
+
 const state = {
   assets: [],
   activeAssetId: null,
@@ -129,6 +164,8 @@ function refreshPresetSceneFilter() {
     select.value = "all";
     state.activePresetScene = "all";
   }
+
+  syncPresetSceneFilterToCurrentScene();
 }
 
 function persistTemplates() {
@@ -230,6 +267,30 @@ function updateTickerLiveStatus(text) {
   }
 }
 
+function updateLowerThirdQuickStatus(text) {
+  const node = document.getElementById("lowerThirdQuickStatus");
+  if (node) {
+    node.textContent = text;
+  }
+}
+
+function syncPresetSceneFilterToCurrentScene(force = false) {
+  const currentScene = state.obs.currentScene || "";
+  const select = document.getElementById("presetSceneFilter");
+  if (!select || !currentScene) {
+    return;
+  }
+  const options = [...select.options].map((option) => option.value);
+  if (!options.includes(currentScene)) {
+    return;
+  }
+  if (force || state.activePresetScene === "all" || state.activePresetScene === "") {
+    state.activePresetScene = currentScene;
+    select.value = currentScene;
+    renderPresetList();
+  }
+}
+
 function syncQuickEditor() {
   const asset = getSelectedAsset();
   const title = document.getElementById("quickEditTitle");
@@ -298,6 +359,30 @@ function fillFormFromAsset(asset) {
   document.getElementById("assetTransition").value = asset.transition || "fade";
   document.getElementById("assetLayer").value = asset.layer || "main";
   document.getElementById("assetFile").value = "";
+}
+
+function createLowerThirdFromTemplate(templateKey) {
+  const template = lowerThirdQuickTemplates[templateKey];
+  if (!template) {
+    return;
+  }
+  const asset = {
+    id: crypto.randomUUID(),
+    type: "slide",
+    mediaUrl: "",
+    duration: 0,
+    ...template
+  };
+  state.assets.unshift(asset);
+  state.selectedAssetId = asset.id;
+  persistAssets();
+  refreshGroupFilter();
+  renderAssetList();
+  renderRemoteLists();
+  syncQuickEditor();
+  fillFormFromAsset(asset);
+  activateAsset(asset);
+  updateLowerThirdQuickStatus(`Hazir lower-third yayina verildi: ${asset.title}`);
 }
 
 function cloneAsset(asset, overrides = {}) {
@@ -918,6 +1003,7 @@ async function populateObsScenes() {
       state.obs.currentScene = response.responseData.currentProgramSceneName;
     }
     syncObsIndicators();
+    syncPresetSceneFilterToCurrentScene(true);
     updateObsStatus(`OBS bagli • ${scenes.length} scene`);
   } catch (error) {
     updateObsStatus(`Scene okunamadi: ${error.message}`);
@@ -992,6 +1078,7 @@ async function connectObs() {
           select.value = state.obs.currentScene;
         }
         syncObsIndicators();
+        syncPresetSceneFilterToCurrentScene(true);
       }
       if (eventType === "SceneItemEnableStateChanged") {
         const selectedScene = document.getElementById("obsSceneSelect")?.value;
@@ -1309,6 +1396,11 @@ function setupDeckMode() {
   document.getElementById("presetSceneFilter")?.addEventListener("change", (event) => {
     state.activePresetScene = event.target.value;
     renderPresetList();
+  });
+  document.querySelectorAll("[data-lower-third-template]").forEach((button) => {
+    button.addEventListener("click", () => {
+      createLowerThirdFromTemplate(button.dataset.lowerThirdTemplate);
+    });
   });
   document.getElementById("openOverlayWindow").addEventListener("click", () => {
     window.open("./index.html?mode=overlay", "_blank", "noopener,noreferrer");
