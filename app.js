@@ -1,5 +1,6 @@
 const STORAGE_KEY = "stream-overlay-deck-assets-v1";
 const PRESET_STORAGE_KEY = "stream-overlay-deck-presets-v1";
+const TEMPLATE_STORAGE_KEY = "stream-overlay-deck-templates-v1";
 const CHANNEL_NAME = "stream-overlay-live-channel";
 const HOTKEY_LIMIT = 9;
 
@@ -49,6 +50,7 @@ const state = {
   rundown: [],
   rundownIndex: -1,
   presets: [],
+  templates: [],
   obs: {
     socket: null,
     connected: false,
@@ -89,12 +91,29 @@ function loadPresets() {
   }
 }
 
+function loadTemplates() {
+  const raw = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+  if (!raw) {
+    state.templates = [];
+    return;
+  }
+  try {
+    state.templates = JSON.parse(raw);
+  } catch {
+    state.templates = [];
+  }
+}
+
 function persistAssets() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.assets));
 }
 
 function persistPresets() {
   localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(state.presets));
+}
+
+function persistTemplates() {
+  localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(state.templates));
 }
 
 function clearRundownAutoplayTimer() {
@@ -242,6 +261,27 @@ function clearForm() {
   document.getElementById("assetFile").value = "";
 }
 
+function fillFormFromAsset(asset) {
+  document.getElementById("assetType").value = asset.type || "slide";
+  document.getElementById("assetTitle").value = asset.title || "";
+  document.getElementById("assetText").value = asset.text || "";
+  document.getElementById("assetMedia").value = asset.mediaUrl || "";
+  document.getElementById("assetTheme").value = asset.theme || "neon";
+  document.getElementById("assetDuration").value = String(asset.duration || 0);
+  document.getElementById("assetGroup").value = asset.group || "";
+  document.getElementById("assetTransition").value = asset.transition || "fade";
+  document.getElementById("assetLayer").value = asset.layer || "main";
+  document.getElementById("assetFile").value = "";
+}
+
+function cloneAsset(asset, overrides = {}) {
+  return {
+    ...asset,
+    ...overrides,
+    id: crypto.randomUUID()
+  };
+}
+
 function sendOverlayCommand(command) {
   channel.postMessage(command);
 }
@@ -300,6 +340,7 @@ function renderAssetList() {
       <div class="asset-actions">
         <button class="primary-button" data-action="show" data-id="${asset.id}">Yayina Ver</button>
         <button class="secondary-button" data-action="edit" data-id="${asset.id}">Duzenle</button>
+        <button class="secondary-button" data-action="duplicate" data-id="${asset.id}">Kopyala</button>
         <button class="secondary-button" data-action="queue" data-id="${asset.id}">Rundown</button>
         <button class="secondary-button" data-action="up" data-id="${asset.id}">Yukari</button>
         <button class="secondary-button" data-action="down" data-id="${asset.id}">Asagi</button>
@@ -324,6 +365,19 @@ function renderAssetList() {
       }
       if (action === "edit") {
         selectAsset(assetId);
+        return;
+      }
+      if (action === "duplicate") {
+        const copy = cloneAsset(state.assets[index], {
+          title: `${state.assets[index].title} Kopya`
+        });
+        state.assets.unshift(copy);
+        state.selectedAssetId = copy.id;
+        persistAssets();
+        refreshGroupFilter();
+        renderAssetList();
+        renderRemoteLists();
+        syncQuickEditor();
         return;
       }
       if (action === "queue") {
@@ -461,6 +515,72 @@ function renderPresetList() {
         return;
       }
       await runPreset(preset);
+    });
+  });
+}
+
+function renderTemplateList() {
+  const templateList = document.getElementById("templateList");
+  if (!templateList) {
+    return;
+  }
+  templateList.innerHTML = "";
+  if (!state.templates.length) {
+    templateList.innerHTML = `<article class="asset-card"><div class="asset-meta"><h3>Henuz sablon yok</h3><p>Secili karttan sablon kaydederek tekrar kullanilabilir formatlar olusturun.</p></div></article>`;
+    return;
+  }
+
+  state.templates.forEach((template, index) => {
+    const item = document.createElement("article");
+    item.className = "asset-card";
+    item.innerHTML = `
+      <div class="asset-meta">
+        <div class="section-head">
+          <div class="hotkey-badge">${index + 1}</div>
+          <div>
+            <h3>${template.name}</h3>
+            <p>${template.type} • ${template.group || "Genel"} • ${template.layer || "main"}</p>
+          </div>
+        </div>
+      </div>
+      <div class="asset-actions">
+        <button class="primary-button" data-template-action="use" data-index="${index}">Forma Doldur</button>
+        <button class="secondary-button" data-template-action="create" data-index="${index}">Kart Uret</button>
+        <button class="secondary-button" data-template-action="delete" data-index="${index}">Sil</button>
+      </div>
+    `;
+    templateList.appendChild(item);
+  });
+
+  templateList.querySelectorAll("button[data-template-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.index);
+      const template = state.templates[index];
+      if (!template) {
+        return;
+      }
+      if (button.dataset.templateAction === "delete") {
+        state.templates.splice(index, 1);
+        persistTemplates();
+        renderTemplateList();
+        return;
+      }
+      if (button.dataset.templateAction === "use") {
+        fillFormFromAsset(template);
+        updateQuickEditStatus(`Sablon forma dolduruldu: ${template.name}`);
+        return;
+      }
+      const asset = cloneAsset(template, {
+        title: `${template.title} Yeni`
+      });
+      state.assets.unshift(asset);
+      state.selectedAssetId = asset.id;
+      persistAssets();
+      refreshGroupFilter();
+      renderAssetList();
+      renderRemoteLists();
+      syncQuickEditor();
+      updateQuickEditStatus(`Sablondan yeni kart olustu: ${asset.title}`);
     });
   });
 }
@@ -917,6 +1037,23 @@ function clearQuickEditSelection() {
   syncQuickEditor();
 }
 
+function saveSelectedAsTemplate() {
+  const asset = getSelectedAsset();
+  if (!asset) {
+    updateQuickEditStatus("Sablon kaydetmek icin once bir kart secin.");
+    return;
+  }
+  const template = {
+    ...asset,
+    id: crypto.randomUUID(),
+    name: `${asset.title} Sablon`
+  };
+  state.templates.unshift(template);
+  persistTemplates();
+  renderTemplateList();
+  updateQuickEditStatus(`Sablon kaydedildi: ${template.name}`);
+}
+
 function downloadOfflineHtml() {
   const html = document.documentElement.outerHTML;
   const blob = new Blob([html], { type: "text/html" });
@@ -946,10 +1083,12 @@ function toggleRundownAutoplay(forceValue) {
 function setupDeckMode() {
   loadAssets();
   loadPresets();
+  loadTemplates();
   refreshGroupFilter();
   renderAssetList();
   renderRundown();
   renderPresetList();
+  renderTemplateList();
   renderRemoteLists();
   updateRundownAutoplayStatus();
   syncObsIndicators();
@@ -1005,6 +1144,7 @@ function setupDeckMode() {
     updateRundownAutoplayStatus();
   });
   document.getElementById("savePreset")?.addEventListener("click", savePreset);
+  document.getElementById("saveTemplate")?.addEventListener("click", saveSelectedAsTemplate);
   document.getElementById("quickEditApply")?.addEventListener("click", applyQuickEdit);
   document.getElementById("quickEditShow")?.addEventListener("click", () => {
     const asset = getSelectedAsset();
