@@ -204,6 +204,13 @@ function updateQuickEditStatus(text) {
   }
 }
 
+function updateTickerLiveStatus(text) {
+  const node = document.getElementById("tickerLiveStatus");
+  if (node) {
+    node.textContent = text;
+  }
+}
+
 function syncQuickEditor() {
   const asset = getSelectedAsset();
   const title = document.getElementById("quickEditTitle");
@@ -999,6 +1006,7 @@ async function addAssetFromForm() {
   renderRemoteLists();
   clearForm();
   syncQuickEditor();
+  syncTickerEditor();
 }
 
 function applyQuickEdit() {
@@ -1019,6 +1027,7 @@ function applyQuickEdit() {
   renderRundown();
   renderRemoteLists();
   syncQuickEditor();
+  syncTickerEditor();
 
   if (state.activeAssetId === asset.id) {
     sendOverlayCommand({
@@ -1035,6 +1044,121 @@ function clearQuickEditSelection() {
   state.selectedAssetId = null;
   renderAssetList();
   syncQuickEditor();
+  syncTickerEditor();
+}
+
+function getActiveTickerAsset() {
+  return state.assets.find((asset) => asset.id === state.activeAssetId && asset.type === "ticker") || null;
+}
+
+function getFirstTickerAsset() {
+  return state.assets.find((asset) => asset.type === "ticker") || null;
+}
+
+function syncTickerEditor() {
+  const tickerField = document.getElementById("tickerLiveText");
+  if (!tickerField) {
+    return;
+  }
+  const activeTicker = getActiveTickerAsset();
+  const fallbackTicker = getFirstTickerAsset();
+  const ticker = activeTicker || fallbackTicker;
+  tickerField.value = ticker?.text || ticker?.title || "";
+}
+
+function applyLiveTickerUpdate() {
+  const text = document.getElementById("tickerLiveText")?.value.trim() || "";
+  if (!text) {
+    updateTickerLiveStatus("Ticker metni bos olamaz.");
+    return;
+  }
+
+  let ticker = getActiveTickerAsset() || getFirstTickerAsset();
+  if (!ticker) {
+    ticker = {
+      id: crypto.randomUUID(),
+      type: "ticker",
+      title: "Canli Ticker",
+      text,
+      mediaUrl: "",
+      theme: "minimal",
+      duration: 0,
+      group: "Alt Bant",
+      transition: "fade",
+      layer: "lower-third"
+    };
+    state.assets.unshift(ticker);
+  } else {
+    ticker.text = text;
+    ticker.title = ticker.title || "Canli Ticker";
+  }
+
+  state.selectedAssetId = ticker.id;
+  persistAssets();
+  refreshGroupFilter();
+  renderAssetList();
+  renderRemoteLists();
+  syncQuickEditor();
+  syncTickerEditor();
+  activateAsset(ticker);
+  updateTickerLiveStatus("Ticker yayinda guncellendi.");
+}
+
+function clearLiveTicker() {
+  document.getElementById("tickerLiveText").value = "";
+  const activeTicker = getActiveTickerAsset();
+  if (activeTicker) {
+    clearOverlay();
+  }
+  updateTickerLiveStatus("Ticker temizlendi.");
+}
+
+function exportRundown() {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    rundown: state.rundown,
+    assets: state.assets.filter((asset) => state.rundown.includes(asset.id))
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "stream-overlay-rundown.json";
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function mergeImportedAssets(importedAssets = []) {
+  const idMap = new Map();
+  importedAssets.forEach((asset) => {
+    const copy = cloneAsset(asset);
+    idMap.set(asset.id, copy.id);
+    state.assets.push(copy);
+  });
+  return idMap;
+}
+
+async function importRundownFromFile(file) {
+  if (!file) {
+    return;
+  }
+  const raw = await file.text();
+  const payload = JSON.parse(raw);
+  const importedAssets = Array.isArray(payload.assets) ? payload.assets : [];
+  const importedRundown = Array.isArray(payload.rundown) ? payload.rundown : [];
+  const idMap = mergeImportedAssets(importedAssets);
+  const nextRundownIds = importedRundown
+    .map((oldId) => idMap.get(oldId))
+    .filter(Boolean);
+
+  state.rundown = nextRundownIds;
+  state.rundownIndex = -1;
+  persistAssets();
+  refreshGroupFilter();
+  renderAssetList();
+  renderRundown();
+  renderRemoteLists();
+  updateQuickEditStatus(`Rundown ice aktarıldi: ${nextRundownIds.length} oge`);
 }
 
 function saveSelectedAsTemplate() {
@@ -1093,6 +1217,7 @@ function setupDeckMode() {
   updateRundownAutoplayStatus();
   syncObsIndicators();
   syncQuickEditor();
+  syncTickerEditor();
 
   document.getElementById("saveAsset").addEventListener("click", addAssetFromForm);
   document.getElementById("clearForm").addEventListener("click", clearForm);
@@ -1136,6 +1261,20 @@ function setupDeckMode() {
     renderRundown();
     renderRemoteLists();
   });
+  document.getElementById("exportRundown")?.addEventListener("click", exportRundown);
+  document.getElementById("importRundownFile")?.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    try {
+      await importRundownFromFile(file);
+    } catch {
+      updateQuickEditStatus("Rundown dosyasi okunamadi.");
+    } finally {
+      event.target.value = "";
+    }
+  });
   document.getElementById("rundownNext")?.addEventListener("click", () => nextRundown(1));
   document.getElementById("rundownPrev")?.addEventListener("click", () => nextRundown(-1));
   document.getElementById("rundownAutoToggle")?.addEventListener("click", () => toggleRundownAutoplay());
@@ -1153,6 +1292,8 @@ function setupDeckMode() {
     }
   });
   document.getElementById("quickEditClear")?.addEventListener("click", clearQuickEditSelection);
+  document.getElementById("tickerLiveApply")?.addEventListener("click", applyLiveTickerUpdate);
+  document.getElementById("tickerLiveClear")?.addEventListener("click", clearLiveTicker);
 
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();

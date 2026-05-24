@@ -193,7 +193,14 @@
                 <p class="panel-kicker">Rundown</p>
                 <h2>Yayin akisi</h2>
               </div>
-              <button id="clearRundown" class="secondary-button">Temizle</button>
+              <div class="topbar-actions">
+                <button id="exportRundown" class="secondary-button">Disa Aktar</button>
+                <label class="secondary-button file-button">
+                  Ice Aktar
+                  <input id="importRundownFile" type="file" accept="application/json" hidden />
+                </label>
+                <button id="clearRundown" class="secondary-button">Temizle</button>
+              </div>
             </div>
             <div class="button-row">
               <button id="rundownPrev" class="secondary-button">Onceki</button>
@@ -251,6 +258,26 @@
               <button id="saveTemplate" class="secondary-button">Sablon Kaydet</button>
             </div>
             <p id="quickEditStatus" class="hint">Duzenlemek icin kart listesinden bir kart secin.</p>
+          </div>
+
+          <div class="panel">
+            <div class="section-head">
+              <div>
+                <p class="panel-kicker">Canli Ticker</p>
+                <h2>Alt bandi akarken guncelle</h2>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label class="full">
+                Ticker Metni
+                <textarea id="tickerLiveText" placeholder="Canli yayin alt bandi metni"></textarea>
+              </label>
+            </div>
+            <div class="button-row">
+              <button id="tickerLiveApply" class="primary-button">Ticker Guncelle</button>
+              <button id="tickerLiveClear" class="secondary-button">Ticker Temizle</button>
+            </div>
+            <p id="tickerLiveStatus" class="hint">Mevcut veya yeni bir ticker kartini kesinti olmadan gunceller.</p>
           </div>
 
           <div class="panel">

@@ -139,6 +139,11 @@ button:hover {
   color: var(--text);
 }
 
+.file-button {
+  position: relative;
+  overflow: hidden;
+}
+
 .deck-layout {
   display: grid;
   grid-template-columns: minmax(360px, 520px) 1fr;
