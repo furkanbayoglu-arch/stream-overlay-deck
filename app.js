@@ -750,6 +750,7 @@ function renderTemplateList() {
 function renderRemoteLists() {
   const remoteAssetList = document.getElementById("remoteAssetList");
   const remoteRundownList = document.getElementById("remoteRundownList");
+  const remotePresetList = document.getElementById("remotePresetList");
   if (!remoteAssetList || !remoteRundownList) {
     return;
   }
@@ -804,6 +805,37 @@ function renderRemoteLists() {
       playRundownIndex(Number(button.dataset.remoteRundown));
     });
   });
+
+  if (remotePresetList) {
+    remotePresetList.innerHTML = "";
+    const favoritePresets = state.presets.filter((preset) => preset.favorite);
+    if (!favoritePresets.length) {
+      remotePresetList.innerHTML = `<article class="asset-card"><div class="asset-meta"><h3>Favori preset yok</h3><p>Deck tarafinda favori isaretleyince burada gorunecek.</p></div></article>`;
+    } else {
+      favoritePresets.forEach((preset) => {
+        const item = document.createElement("article");
+        item.className = "asset-card is-favorite";
+        item.innerHTML = `
+          <div class="asset-meta">
+            <h3>${preset.name}</h3>
+            <p>${preset.sceneName || "Scene yok"} • ${preset.assetTitle || "Kart yok"}</p>
+          </div>
+          <div class="asset-actions">
+            <button class="primary-button" data-remote-preset="${preset.id}">Calistir</button>
+          </div>
+        `;
+        remotePresetList.appendChild(item);
+      });
+      remotePresetList.querySelectorAll("button[data-remote-preset]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const preset = state.presets.find((entry) => entry.id === button.dataset.remotePreset);
+          if (preset) {
+            await runPreset(preset);
+          }
+        });
+      });
+    }
+  }
 }
 
 function playRundownIndex(index) {
@@ -1287,6 +1319,28 @@ function exportRundown() {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
+function exportSession() {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    assets: state.assets,
+    rundown: state.rundown,
+    presets: state.presets,
+    templates: state.templates,
+    ui: {
+      activeGroup: state.activeGroup,
+      activePresetScene: state.activePresetScene,
+      rundownGapSeconds: state.rundownGapSeconds
+    }
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "stream-overlay-session.json";
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
 function mergeImportedAssets(importedAssets = []) {
   const idMap = new Map();
   importedAssets.forEach((asset) => {
@@ -1318,6 +1372,38 @@ async function importRundownFromFile(file) {
   renderRundown();
   renderRemoteLists();
   updateQuickEditStatus(`Rundown ice aktarıldi: ${nextRundownIds.length} oge`);
+}
+
+async function importSessionFromFile(file) {
+  if (!file) {
+    return;
+  }
+  const raw = await file.text();
+  const payload = JSON.parse(raw);
+  state.assets = Array.isArray(payload.assets) ? payload.assets : [];
+  state.rundown = Array.isArray(payload.rundown) ? payload.rundown : [];
+  state.presets = Array.isArray(payload.presets) ? payload.presets : [];
+  state.templates = Array.isArray(payload.templates) ? payload.templates : [];
+  state.activeGroup = payload.ui?.activeGroup || "all";
+  state.activePresetScene = payload.ui?.activePresetScene || "all";
+  state.rundownGapSeconds = Math.max(0, Number(payload.ui?.rundownGapSeconds || 3));
+  state.selectedAssetId = state.assets[0]?.id || null;
+  state.activeAssetId = null;
+
+  persistAssets();
+  persistPresets();
+  persistTemplates();
+  refreshGroupFilter();
+  refreshPresetSceneFilter();
+  renderAssetList();
+  renderRundown();
+  renderPresetList();
+  renderTemplateList();
+  renderRemoteLists();
+  syncQuickEditor();
+  syncTickerEditor();
+  updateRundownAutoplayStatus();
+  updateQuickEditStatus("Session ice aktarıldi.");
 }
 
 function saveSelectedAsTemplate() {
@@ -1440,6 +1526,20 @@ function setupDeckMode() {
       await importRundownFromFile(file);
     } catch {
       updateQuickEditStatus("Rundown dosyasi okunamadi.");
+    } finally {
+      event.target.value = "";
+    }
+  });
+  document.getElementById("exportSession")?.addEventListener("click", exportSession);
+  document.getElementById("importSessionFile")?.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    try {
+      await importSessionFromFile(file);
+    } catch {
+      updateQuickEditStatus("Session dosyasi okunamadi.");
     } finally {
       event.target.value = "";
     }

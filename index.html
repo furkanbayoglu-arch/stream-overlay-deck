@@ -308,6 +308,13 @@
                 <p class="panel-kicker">Sablonlar</p>
                 <h2>Hazir formatlar</h2>
               </div>
+              <div class="topbar-actions">
+                <button id="exportSession" class="secondary-button">Session Disa Aktar</button>
+                <label class="secondary-button file-button">
+                  Session Ice Aktar
+                  <input id="importSessionFile" type="file" accept="application/json" hidden />
+                </label>
+              </div>
             </div>
             <div id="templateList" class="asset-list"></div>
           </div>
@@ -336,6 +343,11 @@
           <p class="panel-kicker">Rundown</p>
           <p id="remoteAutoStatus" class="hint">Otomatik oynatma kapali</p>
           <div id="remoteRundownList" class="asset-list"></div>
+        </section>
+        <section class="panel">
+          <p class="panel-kicker">Presetler</p>
+          <p class="hint">Favori presetleri telefondan ya da ikinci cihazdan calistirin.</p>
+          <div id="remotePresetList" class="asset-list"></div>
         </section>
       </main>
     </div>

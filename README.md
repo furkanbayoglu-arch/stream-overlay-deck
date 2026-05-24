@@ -17,6 +17,7 @@ https://furkanbayoglu-arch.github.io/stream-overlay-deck/
 - Live ticker text updates and rundown JSON import/export
 - Scene-filtered presets with a favorites quick bar
 - Auto scene-aware preset filtering and quick lower-third buttons
+- Full session JSON save/load and remote preset triggering
 - Asset groups and quick filtering
 - Layer support: `background`, `main`, `lower-third`
 - Rundown queue with previous/next controls
